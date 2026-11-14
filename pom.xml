@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>dev.k9o</groupId>
+    <artifactId>kibo</artifactId>
+    <version>1.5.2</version>
+    <packaging>jar</packaging>
+
+    <name>k9o-kibo</name>
+    <description>Kibo Zero-Knowledge BYOK/HYOK vault SDK for Java — client-side encrypt/decrypt against your own KMS over the audited Rust core (kibo-kms-rest-ffi) via the uniffi JVM binding. The platform never sees plaintext. dev.k9o.kibo.Kibo.encrypt/decrypt; throws dev.k9o.KError.</description>
+    <url>https://kilimanjaro.dev</url>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Kilimanjaro Engineering</name>
+            <email>engineering@kilimanjaro.dev</email>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/k9o-platform/kibo-kms-rest.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/k9o-platform/kibo-kms-rest.git</developerConnection>
+        <url>https://github.com/k9o-platform/kibo-kms-rest</url>
+    </scm>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <kotlin.version>1.9.23</kotlin.version>
+        <junit.version>5.11.0</junit.version>
+    </properties>
+
+    <dependencies>
+        <!-- KError lives in the core SDK; the ZK surface maps the bound-core
+             error onto it (consistent with the Python/Ruby server SDKs). -->
+        <dependency>
+            <groupId>dev.k9o</groupId>
+            <artifactId>core</artifactId>
+            <version>1.5.2</version>
+        </dependency>
+        <!-- uniffi JVM-binding runtime: JNA loads the native cdylib; the Kotlin
+             binding + coroutines are required even though the Java facade only
+             calls the SYNC `_blocking` exports (the binding still declares the
+             async `suspend` exports). -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>5.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib</artifactId>
+            <version>${kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-coroutines-core</artifactId>
+            <version>1.8.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!--
+      CI-injected build artifacts (gitignored; produced by kibo CI + the
+      native-fetch pipeline stage):
+        - src/main/kotlin/uniffi/kibo_kms_rest_ffi/kibo_kms_rest_ffi.kt
+              the uniffi JVM binding;
+        - src/main/resources/<os-arch>/libkibo_kms_rest_ffi.{so,dylib,dll}
+              the native cdylib, loaded by JNA from the classpath.
+
+      The `with-binding` profile switches on by itself when the binding file is
+      present. It compiles src/main/kotlin (the binding and the shipped adapter
+      dev.k9o.kibo.UniffiAppCore) before the Java sources, which see the compiled
+      classes. Without the binding the `no-binding` profile builds the pure-Java
+      part only (AppCore, KiboClientCore and their tests); the Kibo facade, the
+      adapter and the tests that need them are left out.
+    -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.0</version>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>with-binding</id>
+            <activation>
+                <file><exists>${basedir}/src/main/kotlin/uniffi/kibo_kms_rest_ffi/kibo_kms_rest_ffi.kt</exists></file>
+            </activation>
+            <build>
+                <plugins>
+                    <!-- Compile the binding and the adapter first; the Java sources (dev.k9o.kibo.Kibo) import the binding.
+                         The Java source root is listed so the adapter sees AppCore. -->
+                    <plugin>
+                        <groupId>org.jetbrains.kotlin</groupId>
+                        <artifactId>kotlin-maven-plugin</artifactId>
+                        <version>${kotlin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>compile</id>
+                                <phase>process-sources</phase>
+                                <goals><goal>compile</goal></goals>
+                                <configuration>
+                                    <sourceDirs>
+                                        <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
+                                        <sourceDir>${project.basedir}/src/main/java</sourceDir>
+                                    </sourceDirs>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>no-binding</id>
+            <activation>
+                <file><missing>${basedir}/src/main/kotlin/uniffi/kibo_kms_rest_ffi/kibo_kms_rest_ffi.kt</missing></file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>dev/k9o/kibo/Kibo.java</exclude>
+                            </excludes>
+                            <testExcludes>
+                                <testExclude>dev/k9o/kibo/KiboTest.java</testExclude>
+                                <testExclude>dev/k9o/kibo/UniffiAppCoreTest.java</testExclude>
+                            </testExcludes>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/KiboTest.java</exclude>
+                                <exclude>**/UniffiAppCoreTest.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- release profile — identical to the core SDK (release build only). -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.10.1</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <!-- The Java facade imports the Kotlin binding that kotlin-maven-plugin compiles into target/classes;
+                                 the javadoc tool does not put that directory on its classpath, so name it, with the dependencies
+                                 the facade and the binding resolve against. -->
+                            <additionalOptions>
+                                <additionalOption>-classpath</additionalOption>
+                                <additionalOption>${project.build.outputDirectory}${path.separator}${settings.localRepository}/dev/k9o/core/1.5.2/core-1.5.2.jar${path.separator}${settings.localRepository}/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar${path.separator}${settings.localRepository}/org/jetbrains/kotlin/kotlin-stdlib/${kotlin.version}/kotlin-stdlib-${kotlin.version}.jar${path.separator}${settings.localRepository}/org/jetbrains/kotlinx/kotlinx-coroutines-core/1.8.1/kotlinx-coroutines-core-1.8.1.jar</additionalOption>
+                            </additionalOptions>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.4</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

@@ -1,0 +1,5 @@
+target/
+# uniffi JVM binding (CI-injected from the kibo artifact bundle)
+src/main/kotlin/uniffi/
+# native cdylib (CI-injected per os-arch; loaded by JNA from the classpath)
+src/main/resources/*/

@@ -1,0 +1,2 @@
+# native cdylib (libkibo_kms_rest_ffi.{so,dylib,dll}) CI-injected under
+# <os-arch>/ here (gitignored); JNA loads it from the classpath.
